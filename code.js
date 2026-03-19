@@ -1,3 +1,4 @@
+//frist you need to select a element after use ctrl+enter on this snippet, save as snippet and use the "deep-analyze"
 let el = $0;
 if (!el) {
   console.error('you need to select a element')
@@ -100,8 +101,8 @@ while (currentElement && currentElement.tagName && levels < 10) {
 }
 
 let relatedStyles = new Set();
-let computedStyles = new Map();
-let cssVariables = new Map();
+let computedStyles = new Map(); 
+let cssVariables = new Map();    
 let selectorsToSearch = [];
 
 allElements.forEach(elem => {
@@ -157,23 +158,13 @@ try {
 
 let computedForElement = getComputedCSSForElement(el);
 
+// MODIFICADO: Removido o "usado como"
 let variablesList = [];
 cssVariables.forEach((value, name) => {
-  let isUsed = false;
-  try {
-    const computed = getComputedStyle(el);
-    const usedValue = computed.getPropertyValue(name).trim();
-    if (usedValue) {
-      isUsed = true;
-      variablesList.push(`  ${name}: ${value} (usado como: ${usedValue})`);
-    } else {
-      variablesList.push(`  ${name}: ${value}`);
-    }
-  } catch (e) {
-    variablesList.push(`  ${name}: ${value}`);
-  }
+  variablesList.push(`  ${name}: ${value}`);
 });
 
+// 1. Original CSS
 if (el.className) {
   el.className.split(' ').forEach(c => {
     for (let sheet of document.styleSheets) {
@@ -194,6 +185,7 @@ if (el.className) {
   });
 }
 
+// 2. Element names
 let namesToSearch = new Set();
 if (el.id) namesToSearch.add(el.id);
 if (el.className) {
@@ -206,6 +198,7 @@ Array.from(el.attributes).forEach(attr => {
 });
 namesToSearch.add(el.tagName.toLowerCase());
 
+// 3. Scripts
 let scripts = Array.from(document.querySelectorAll('script'))
   .map(s => s.textContent)
   .filter(t => t && t.length > 0);
