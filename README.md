@@ -20,6 +20,6 @@ if you have the problem :
 
 try using:
 ```javascript
-const elemento = $0;
-fetch('https://raw.githubusercontent.com/Henriquecom/deep-analyze/refs/heads/main/code.js').then(r=>r.text()).then(c=>eval(c.replace(/\$0/g, 'elemento')))
+const a = $0;
+fetch('https://raw.githubusercontent.com/Henriquecom/deep-analyze/refs/heads/main/code.js').then(r=>r.text()).then(c=>eval(c.replace(/\$0/g, 'a')))
 ```
