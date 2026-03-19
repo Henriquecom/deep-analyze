@@ -1,423 +1,338 @@
-//frist you need to select a element after use ctrl+enter on this snippet, save as snippet and use the "deep-analyze"
+
+// Usage: paste in browser console
+
 let el = $0;
 if (!el) {
-  console.error('you need to select a element')
+    console.error('❌ Select an element first!');
 } else {
-
-const startTime = performance.now();
-
-let output = [];
-let uniqueLines = new Set();
-let relatedElements = new Set();
-let relationships = [];
-
-function resolveCSSVariables(cssText) {
-  const varRegex = /var\(--[^,)]+(?:,[^)]+)?\)/g;
-  const matches = cssText.match(varRegex);
-  
-  if (!matches) return cssText;
-  
-  let resolvedText = cssText;
-  const computedStyle = getComputedStyle(document.documentElement);
-  
-  matches.forEach(match => {
-    const innerMatch = match.match(/var\((--[^,)]+)(?:,\s*([^)]+))?\)/);
-    if (innerMatch) {
-      const varName = innerMatch[1];
-      const fallback = innerMatch[2] || '';
-      
-      let value = computedStyle.getPropertyValue(varName).trim();
-      
-      if (!value && el) {
-        value = getComputedStyle(el).getPropertyValue(varName).trim();
-      }
-      
-      if (value) {
-        resolvedText = resolvedText.replace(match, value);
-      } else if (fallback) {
-        resolvedText = resolvedText.replace(match, fallback.trim());
-      }
-    }
-  });
-  
-  if (resolvedText.match(varRegex)) {
-    return resolveCSSVariables(resolvedText);
-  }
-  
-  return resolvedText;
-}
-
-function getComputedCSSForElement(element) {
-  const computed = getComputedStyle(element);
-  const importantProps = [
-    'display', 'position', 'width', 'height', 'margin', 'padding',
-    'color', 'background-color', 'font-size', 'font-weight',
-    'border', 'flex', 'grid', 'opacity', 'z-index', 'overflow',
-    'transform', 'transition', 'animation'
-  ];
-  
-  let result = [];
-  importantProps.forEach(prop => {
-    const value = computed.getPropertyValue(prop);
-    if (value && value !== 'none' && value !== 'auto' && value !== '0px') {
-      result.push(`  ${prop}: ${value};`);
-    }
-  });
-  
-  return result;
-}
-
-
-let fullHtml = [];
-let currentElement = el;
-let levels = 0;
-let allElements = [];
-
-while (currentElement && currentElement.tagName) {
-  allElements.unshift(currentElement);
-  
-  let tag = currentElement.tagName.toLowerCase();
-  let id = currentElement.id ? ` id="${currentElement.id}"` : '';
-  let classes = currentElement.className ? ` class="${currentElement.className}"` : '';
-  
-  let otherAttributes = '';
-  Array.from(currentElement.attributes).forEach(attr => {
-    if (attr.name !== 'id' && attr.name !== 'class') {
-      otherAttributes += ` ${attr.name}="${attr.value}"`;
-    }
-  });
-  
-  let opening = `<${tag}${id}${classes}${otherAttributes}>`;
-  let closing = `</${tag}>`;
-  
-  fullHtml.unshift({
-    level: levels,
-    opening: opening,
-    closing: closing,
-    element: currentElement,
-    tagName: tag
-  });
-  
- 
-  if (tag === 'html') break;
-  
-  currentElement = currentElement.parentElement;
-  levels++;
-}
-
-
-if (!fullHtml.some(item => item.tagName === 'html')) {
-  fullHtml.unshift({
-    level: -1,
-    opening: '<html>',
-    closing: '</html>',
-    tagName: 'html'
-  });
-}
-
-let relatedStyles = new Set();
-let computedStyles = new Map(); 
-let cssVariables = new Map();    
-let selectorsToSearch = [];
-
-allElements.forEach(elem => {
-  if (elem.id) selectorsToSearch.push(`#${elem.id}`);
-  if (elem.className) {
-    elem.className.split(' ').forEach(c => {
-      if (c.trim()) selectorsToSearch.push(`.${c}`);
-    });
-  }
-  selectorsToSearch.push(elem.tagName.toLowerCase());
-});
-
-selectorsToSearch = [...new Set(selectorsToSearch)];
-
-try {
-  for (let sheet of document.styleSheets) {
-    try {
-      for (let rule of sheet.cssRules || []) {
-        if (rule.selectorText === ':root' || rule.selectorText === 'html') {
-          for (let prop of rule.style) {
-            if (prop.startsWith('--')) {
-              cssVariables.set(prop, rule.style.getPropertyValue(prop).trim());
-            }
-          }
-        }
-      }
-    } catch (e) {}
-  }
-} catch (e) {}
-
-try {
-  for (let sheet of document.styleSheets) {
-    try {
-      for (let rule of sheet.cssRules || []) {
-        selectorsToSearch.forEach(sel => {
-          if (rule.selectorText?.includes(sel)) {
-            let originalCSS = rule.cssText;
-            let resolvedCSS = resolveCSSVariables(rule.cssText);
-            
-            if (originalCSS !== resolvedCSS) {
-              relatedStyles.add(`📝 Original: ${originalCSS}`);
-              relatedStyles.add(`✅ Solved: ${resolvedCSS}`);
-              relatedStyles.add('---');
-            } else {
-              relatedStyles.add(originalCSS);
-            }
-          }
-        });
-      }
-    } catch (e) {}
-  }
-} catch (e) {}
-
-let computedForElement = getComputedCSSForElement(el);
-
-let variablesList = [];
-cssVariables.forEach((value, name) => {
-  variablesList.push(`  ${name}: ${value}`);
-});
-
-// 1. Original CSS
-if (el.className) {
-  el.className.split(' ').forEach(c => {
-    for (let sheet of document.styleSheets) {
-      try {
-        for (let rule of sheet.cssRules || []) {
-          if (rule.selectorText?.includes(c)) {
-            let resolved = resolveCSSVariables(rule.cssText);
-            if (resolved !== rule.cssText) {
-              output.push(`📝 Original: ${rule.cssText}`);
-              output.push(`✅ Resolvido: ${resolved}`);
-            } else {
-              output.push(rule.cssText);
-            }
-          }
-        }
-      } catch (e) {}
-    }
-  });
-}
-
-// 2. Element names
-let namesToSearch = new Set();
-if (el.id) namesToSearch.add(el.id);
-if (el.className) {
-  el.className.split(' ').filter(c => c.trim()).forEach(c => namesToSearch.add(c));
-}
-Array.from(el.attributes).forEach(attr => {
-  if (attr.value && (attr.value.includes('-') || /[a-z]/i.test(attr.value))) {
-    namesToSearch.add(attr.value);
-  }
-});
-namesToSearch.add(el.tagName.toLowerCase());
-
-// 3. Scripts
-let scripts = Array.from(document.querySelectorAll('script'))
-  .map(s => s.textContent)
-  .filter(t => t && t.length > 0);
-
-let seen = new Set();
-let allNames = new Set(namesToSearch);
-
-let manipulationMethods = [
-  'setAttribute', 'removeAttribute', 'appendChild', 'removeChild',
-  'insertAdjacentHTML', 'innerHTML', 'outerHTML', 'insertAdjacentText',
-  'classList.add', 'classList.remove', 'classList.toggle', 'classList.replace',
-  'addEventListener', 'removeEventListener', 'style', 'css', 'attr',
-  'addClass', 'removeClass', 'toggleClass', 'hasClass', 'prop', 'val',
-  'after', 'before', 'append', 'prepend', 'remove', 'empty', 'html', 'text',
-  'replaceChild', 'insertBefore', 'cloneNode', 'replaceWith', 'insertAdjacentElement',
-  'scrollIntoView', 'focus', 'blur', 'click', 'submit', 'reset'
-];
-
-function findElementsInCode(line) {
-  let elements = [];
-  let matches = line.match(/querySelector\(['"]([^'"]+)['"]\)/g) || [];
-  matches.forEach(m => {
-    let selector = m.replace(/querySelector\(['"]/, '').replace(/['"]\)/, '');
-    elements.push(selector);
-  });
-  
-  matches = line.match(/getElementById\(['"]([^'"]+)['"]\)/g) || [];
-  matches.forEach(m => {
-    let id = m.replace(/getElementById\(['"]/, '').replace(/['"]\)/, '');
-    elements.push('#' + id);
-  });
-  
-  return elements;
-}
-
-function extractNamesFromCode(code) {
-  let names = new Set();
-  let matches = code.match(/[a-zA-Z_$][a-zA-Z0-9_$]*/g) || [];
-  matches.forEach(name => {
-    if (name.length > 1 && 
-        !['var','let','const','function','return','if','else','for','while',
-          'this','true','false','null','undefined','new','typeof','instanceof',
-          'document','window','console','alert','setTimeout','setInterval',
-          'Array','Object','String','Number','Boolean','Promise','async',
-          'await','try','catch','finally','throw','class','extends',
-          'import','export','default','from','as','break','continue',
-          'switch','case','default','do','in','of','typeof','void',
-          'delete','instanceof','new','super','yield'].includes(name)) {
-      names.add(name);
-    }
-  });
-  return names;
-}
-
-function trace(name, level) {
-  if (level > 1000) return;
-  let key = name + ':' + level;
-  if (seen.has(key)) return;
-  seen.add(key);
-
-  scripts.forEach((script, idx) => {
-    let lines = script.split('\n');
-    lines.forEach((line, i) => {
-      if (!line.includes(name)) return;
-
-      let spaces = '  '.repeat(Math.min(level, 20));
-      let cleanLine = line.trim();
-
-      let hasMethod = manipulationMethods.some(method => line.includes(method));
-      
-      let isDefinition = 
-        line.includes('var ' + name) ||
-        line.includes('let ' + name) ||
-        line.includes('const ' + name) ||
-        line.includes('function ' + name) ||
-        line.match(new RegExp(name + '\\s*=\\s*function')) ||
-        line.match(new RegExp(name + '\\s*[:=]\\s*\\([^)]*\\)\\s*=>'));
-
-      if (hasMethod || isDefinition) {
-        let marker = hasMethod ? '⚡' : '📌';
-        let formattedLine = spaces + `${marker} [${level}] Script ${idx}:${i+1} | ${cleanLine}`;
-        output.push(formattedLine);
+    const startTime = performance.now();
+    
+    // Load AST parser (acorn) dynamically
+    async function loadParser() {
+        if (window.acorn) return window.acorn;
         
-        uniqueLines.add(cleanLine);
-
-        let elementsInLine = findElementsInCode(line);
-        if (elementsInLine.length > 0) {
-          elementsInLine.forEach(sel => {
-            relatedElements.add(sel);
-            relationships.push({
-              from: name,
-              to: sel,
-              action: cleanLine,
-              script: idx,
-              line: i+1
-            });
-          });
-        }
-
-        let newNames = extractNamesFromCode(line);
-        newNames.forEach(newName => {
-          if (newName !== name && !allNames.has(newName)) {
-            allNames.add(newName);
-            trace(newName, level + 1);
-          }
+        return new Promise((resolve) => {
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/acorn@8.8.2/dist/acorn.js';
+            script.onload = () => {
+                const walkScript = document.createElement('script');
+                walkScript.src = 'https://unpkg.com/acorn-walk@8.2.0/dist/walk.js';
+                walkScript.onload = () => resolve(window.acorn);
+                document.head.appendChild(walkScript);
+            };
+            document.head.appendChild(script);
         });
-      }
+    }
+    
+    loadParser().then(acorn => {
+        const walk = window.acorn.walk;
+        
+        // ========== VARIABLE AND TYPE ANALYSIS ==========
+        class VariableAnalyzer {
+            constructor() {
+                this.variables = new Map();
+                this.methodCalls = [];
+                this.functions = new Map();
+                this.arrays = new Map();
+                this.objects = new Map();
+            }
+            
+            analyzeScripts() {
+                const scripts = Array.from(document.querySelectorAll('script'))
+                    .map(s => s.textContent)
+                    .filter(t => t && t.length > 0);
+                
+                scripts.forEach((code, scriptIndex) => {
+                    try {
+                        const ast = acorn.parse(code, {
+                            ecmaVersion: 2020,
+                            locations: true
+                        });
+                        
+                        this.collectDeclarations(ast, scriptIndex);
+                        this.detectMethodCalls(ast, scriptIndex);
+                        
+                    } catch (e) {
+                        // Silent fail - no fallback to avoid false positives
+                    }
+                });
+            }
+            
+            collectDeclarations(ast, scriptIndex) {
+                walk.simple(ast, {
+                    VariableDeclarator: (node) => {
+                        const name = node.id.name;
+                        const init = node.init;
+                        
+                        if (!init) {
+                            this.variables.set(name, {
+                                name, type: 'undefined', script: scriptIndex
+                            });
+                            return;
+                        }
+                        
+                        switch(init.type) {
+                            case 'ArrayExpression':
+                                const elements = init.elements.map(e => {
+                                    if (e.type === 'Literal') return e.value;
+                                    if (e.type === 'Identifier') return `ref:${e.name}`;
+                                    return 'unknown';
+                                });
+                                
+                                this.arrays.set(name, {
+                                    type: 'array',
+                                    elements,
+                                    length: init.elements.length,
+                                    line: init.loc?.start.line,
+                                    script: scriptIndex
+                                });
+                                
+                                this.variables.set(name, {
+                                    name, type: 'array', script: scriptIndex
+                                });
+                                break;
+                                
+                            case 'ObjectExpression':
+                                const props = {};
+                                init.properties.forEach(prop => {
+                                    const key = prop.key.name || prop.key.value;
+                                    props[key] = prop.value.type;
+                                });
+                                
+                                this.objects.set(name, {
+                                    type: 'object',
+                                    properties: props,
+                                    line: init.loc?.start.line,
+                                    script: scriptIndex
+                                });
+                                
+                                this.variables.set(name, {
+                                    name, type: 'object', script: scriptIndex
+                                });
+                                break;
+                                
+                            case 'FunctionExpression':
+                            case 'ArrowFunctionExpression':
+                                this.functions.set(name, {
+                                    type: 'function',
+                                    params: init.params.map(p => p.name),
+                                    line: init.loc?.start.line,
+                                    script: scriptIndex
+                                });
+                                
+                                this.variables.set(name, {
+                                    name, type: 'function', script: scriptIndex
+                                });
+                                break;
+                                
+                            case 'Literal':
+                                this.variables.set(name, {
+                                    name, 
+                                    type: typeof init.value,
+                                    value: init.value,
+                                    script: scriptIndex
+                                });
+                                break;
+                                
+                            case 'Identifier':
+                                this.variables.set(name, {
+                                    name,
+                                    type: 'reference',
+                                    refersTo: init.name,
+                                    script: scriptIndex
+                                });
+                                break;
+                                
+                            case 'CallExpression':
+                                const methodName = init.callee.type === 'MemberExpression' 
+                                    ? init.callee.property.name 
+                                    : init.callee.name;
+                                    
+                                this.variables.set(name, {
+                                    name,
+                                    type: 'call_result',
+                                    called: methodName,
+                                    executes: true,
+                                    line: init.loc?.start.line,
+                                    script: scriptIndex
+                                });
+                                break;
+                        }
+                    },
+                    
+                    FunctionDeclaration: (node) => {
+                        this.functions.set(node.id.name, {
+                            type: 'function',
+                            params: node.params.map(p => p.name),
+                            line: node.loc?.start.line,
+                            script: scriptIndex
+                        });
+                        
+                        this.variables.set(node.id.name, {
+                            name: node.id.name, type: 'function', script: scriptIndex
+                        });
+                    }
+                });
+            }
+            
+            detectMethodCalls(ast, scriptIndex) {
+                walk.simple(ast, {
+                    CallExpression: (node) => {
+                        if (node.callee.type === 'MemberExpression') {
+                            const object = node.callee.object.name;
+                            const method = node.callee.property.name;
+                            
+                            this.methodCalls.push({
+                                type: 'method_call',
+                                object,
+                                method,
+                                line: node.loc?.start.line,
+                                script: scriptIndex,
+                                arguments: node.arguments.map(a => a.type),
+                                objectExists: this.variables.has(object),
+                                objectType: this.variables.get(object)?.type
+                            });
+                            
+                            return;
+                        }
+                        
+                        if (node.callee.type === 'Identifier') {
+                            const funcName = node.callee.name;
+                            
+                            this.methodCalls.push({
+                                type: 'function_call',
+                                function: funcName,
+                                line: node.loc?.start.line,
+                                script: scriptIndex,
+                                isFunction: this.functions.has(funcName) || 
+                                           this.variables.get(funcName)?.type === 'function'
+                            });
+                        }
+                    },
+                    
+                    NewExpression: (node) => {
+                        this.methodCalls.push({
+                            type: 'constructor_call',
+                            constructor: node.callee.name,
+                            line: node.loc?.start.line,
+                            script: scriptIndex
+                        });
+                    },
+                    
+                    AssignmentExpression: (node) => {
+                        if (node.left.type === 'MemberExpression' &&
+                            (node.left.property.name === 'onclick' ||
+                             node.left.property.name === 'onload' ||
+                             node.left.property.name === 'onchange')) {
+                            
+                            this.methodCalls.push({
+                                type: 'event_handler',
+                                object: node.left.object.name,
+                                event: node.left.property.name,
+                                line: node.loc?.start.line,
+                                script: scriptIndex,
+                                handler: node.right.type
+                            });
+                        }
+                    }
+                });
+            }
+            
+            getMethodsRelatedTo(element) {
+                const elementClasses = Array.from(element.classList);
+                const elementId = element.id;
+                const elementTag = element.tagName.toLowerCase();
+                
+                const relevant = this.methodCalls.filter(call => {
+                    const callStr = JSON.stringify(call).toLowerCase();
+                    
+                    const hasClassRef = elementClasses.some(c => 
+                        callStr.includes(c.toLowerCase()));
+                    const hasIdRef = elementId && callStr.includes(elementId.toLowerCase());
+                    const hasTagRef = callStr.includes(elementTag);
+                    
+                    return hasClassRef || hasIdRef || hasTagRef;
+                });
+                
+                return {
+                    calls: relevant,
+                    variables: Array.from(this.variables.entries()),
+                    arrays: Array.from(this.arrays.entries()),
+                    objects: Array.from(this.objects.entries()),
+                    functions: Array.from(this.functions.entries())
+                };
+            }
+        }
+        
+        // ========== RUN ANALYSIS ==========
+        const analyzer = new VariableAnalyzer();
+        analyzer.analyzeScripts();
+        
+        const result = analyzer.getMethodsRelatedTo(el);
+        
+        const totalTime = ((performance.now() - startTime) / 1000).toFixed(2);
+        
+        console.log('%c🔷 DEEP-ANALYZE WITH AST 🔷', 'font-size:16px; font-weight:bold; color:#4A90E2;');
+        console.log(`⏱️  Analysis in ${totalTime}s`);
+        console.log('='.repeat(80));
+        
+        console.log('%c📞 REAL METHOD CALLS:', 'font-size:14px; font-weight:bold; color:#27AE60;');
+        console.log('-'.repeat(50));
+        
+        if (result.calls.length > 0) {
+            result.calls.forEach(call => {
+                if (call.type === 'method_call') {
+                    console.log(`✅ ${call.object}.${call.method}()`);
+                } else if (call.type === 'function_call') {
+                    console.log(`✅ ${call.function}()`);
+                } else {
+                    console.log(`✅ ${call.type}:`, call);
+                }
+                console.log(`   📍 Script ${call.script}, line ${call.line}`);
+                console.log('');
+            });
+        } else {
+            console.log('ℹ️ No method calls found');
+        }
+        
+        console.log('%c📦 VARIABLES:', 'font-size:14px; font-weight:bold; color:#F39C12;');
+        console.log('-'.repeat(50));
+        
+        result.variables.forEach(([name, info]) => {
+            console.log(`📌 ${name}: ${info.type}`);
+        });
+        
+        if (result.arrays.length > 0) {
+            console.log('\n%c📋 ARRAYS:', 'font-size:14px; font-weight:bold; color:#3498DB;');
+            result.arrays.forEach(([name, info]) => {
+                console.log(`📌 ${name} = [${info.elements.join(', ')}] (${info.length} items)`);
+            });
+        }
+        
+        if (result.objects.length > 0) {
+            console.log('\n%c🔧 OBJECTS:', 'font-size:14px; font-weight:bold; color:#9B59B6;');
+            result.objects.forEach(([name, info]) => {
+                const props = Object.keys(info.properties).join(', ');
+                console.log(`📌 ${name} = { ${props} }`);
+            });
+        }
+        
+        if (result.functions.length > 0) {
+            console.log('\n%c⚡ FUNCTIONS:', 'font-size:14px; font-weight:bold; color:#E74C3C;');
+            result.functions.forEach(([name, info]) => {
+                console.log(`📌 ${name}(${info.params.join(', ')})`);
+            });
+        }
+        
+        console.log('\n' + '='.repeat(80));
+        console.log('📊 SUMMARY:');
+        console.log(`📞 Method calls: ${result.calls.length}`);
+        console.log(`📦 Variables: ${result.variables.length}`);
+        console.log(`📋 Arrays: ${result.arrays.length}`);
+        console.log(`🔧 Objects: ${result.objects.length}`);
+        console.log(`⚡ Functions: ${result.functions.length}`);
+        console.log(`⏱️  Time: ${totalTime}s`);
+    }).catch(() => {
+        console.error('❌ Failed to load parser');
     });
-  });
-}
-
-namesToSearch.forEach(name => trace(name, 0));
-
-const totalTime = ((performance.now() - startTime) / 1000).toFixed(2);
-
-console.log('%c🔷 COMPLETE ELEMENT ANALYSIS (WITH CSS VARIABLES RESOLVED) 🔷', 'font-size:16px; font-weight:bold; color:#4A90E2;');
-console.log('%c⏱️  Analysis completed in ' + totalTime + ' seconds', 'font-size:12px; color:#666;');
-console.log('='.repeat(80));
-
-console.log('%c📄 HTML STRUCTURE:', 'font-size:14px; font-weight:bold; color:#27AE60;');
-console.log('-'.repeat(50));
-
-let htmlFinal = [];
-fullHtml.forEach((item, index) => {
-  let indent = '  '.repeat(index);
-  htmlFinal.push(indent + item.opening);
-});
-
-let indentEl = '  '.repeat(fullHtml.length - 1);
-htmlFinal[indentEl.length/2] = htmlFinal[indentEl.length/2] + ' ← [SELECTED]';
-
-for (let i = fullHtml.length - 1; i >= 0; i--) {
-  let indent = '  '.repeat(i);
-  htmlFinal.push(indent + fullHtml[i].closing);
-}
-
-console.log(htmlFinal.join('\n'));
-
-console.log('\n%c🎨 CSS VARIABLES DEFINED:', 'font-size:14px; font-weight:bold; color:#F39C12;');
-console.log('-'.repeat(50));
-if (variablesList.length > 0) {
-  variablesList.forEach(v => console.log(v));
-} else {
-  console.log('No CSS variables defined');
-}
-
-console.log('\n%c🎨 RELATED CSS (with variables resolved):', 'font-size:14px; font-weight:bold; color:#E67E22;');
-console.log('-'.repeat(50));
-if (relatedStyles.size > 0) {
-  relatedStyles.forEach(css => console.log(css));
-} else {
-  console.log('No specific CSS found');
-}
-
-console.log('\n%c📊 COMPUTED STYLES (actual values applied):', 'font-size:14px; font-weight:bold; color:#3498DB;');
-console.log('-'.repeat(50));
-if (computedForElement.length > 0) {
-  console.log('element {');
-  computedForElement.forEach(line => console.log(line));
-  console.log('}');
-}
-
-console.log('\n%c🔗 RELATED ELEMENTS (manipulated along with selected one):', 'font-size:14px; font-weight:bold; color:#9B59B6;');
-console.log('-'.repeat(50));
-if (relationships.length > 0) {
-  relationships.forEach(r => {
-    console.log(`📌 ${r.from} → ${r.to}`);
-    console.log(`   Action: ${r.action}`);
-    console.log(`   Location: Script ${r.script}, line ${r.line}`);
-    console.log('');
-  });
-  
-  console.log('🎯 Elements found:');
-  relatedElements.forEach(sel => console.log(`   - ${sel}`));
-} else {
-  console.log('No related elements found');
-}
-
-console.log('\n%c⚡ JAVASCRIPT:', 'font-size:14px; font-weight:bold; color:#E74C3C;');
-console.log('-'.repeat(50));
-if (uniqueLines.size > 0) {
-  console.log(Array.from(uniqueLines).join('\n'));
-} else {
-  console.log('No JavaScript found');
-}
-
-console.log('\n' + '='.repeat(80));
-console.log('📊 SUMMARY:');
-console.log(`📄 HTML: ${fullHtml.length} levels`);
-console.log(`🎨 CSS Variables: ${variablesList.length} defined`);
-console.log(`🎨 CSS Rules: ${relatedStyles.size} rules`);
-console.log(`📊 Computed properties: ${computedForElement.length}`);
-console.log(`🔗 Related elements: ${relatedElements.size}`);
-console.log(`⚡ JavaScript: ${uniqueLines.size} lines`);
-console.log(`⏱️  Total time: ${totalTime}s`);
-
-console.log( {
-    html: htmlFinal.join('\n'),
-    cssVariables: Array.from(cssVariables.entries()),
-    css: Array.from(relatedStyles),
-    computed: computedForElement,
-    js: Array.from(uniqueLines),
-    related: Array.from(relatedElements),
-    relationships: relationships,
-    performance: totalTime + 's'
-});
-
 }
