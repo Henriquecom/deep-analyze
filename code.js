@@ -1,13 +1,172 @@
-
-// Usage: paste in browser console
-
 let el = $0;
 if (!el) {
     console.error('❌ Select an element first!');
 } else {
     const startTime = performance.now();
     
-    // Load AST parser (acorn) dynamically
+    function resolveCSSVariables(cssText) {
+        const varRegex = /var\(--[^,)]+(?:,[^)]+)?\)/g;
+        const matches = cssText.match(varRegex);
+
+        if (!matches) return cssText;
+
+        let resolvedText = cssText;
+        const computedStyle = getComputedStyle(document.documentElement);
+
+        matches.forEach(match => {
+            const innerMatch = match.match(/var\((--[^,)]+)(?:,\s*([^)]+))?\)/);
+            if (innerMatch) {
+                const varName = innerMatch[1];
+                const fallback = innerMatch[2] || '';
+
+                let value = computedStyle.getPropertyValue(varName).trim();
+
+                if (!value && el) {
+                    value = getComputedStyle(el).getPropertyValue(varName).trim();
+                }
+
+                if (value) {
+                    resolvedText = resolvedText.replace(match, value);
+                } else if (fallback) {
+                    resolvedText = resolvedText.replace(match, fallback.trim());
+                }
+            }
+        });
+
+        if (resolvedText.match(varRegex)) {
+            return resolveCSSVariables(resolvedText);
+        }
+
+        return resolvedText;
+    }
+
+    function getComputedCSSForElement(element) {
+        const computed = getComputedStyle(element);
+        const importantProps = [
+            'display', 'position', 'width', 'height', 'margin', 'padding',
+            'color', 'background-color', 'font-size', 'font-weight',
+            'border', 'flex', 'grid', 'opacity', 'z-index', 'overflow',
+            'transform', 'transition', 'animation'
+        ];
+
+        let result = [];
+        importantProps.forEach(prop => {
+            const value = computed.getPropertyValue(prop);
+            if (value && value !== 'none' && value !== 'auto' && value !== '0px') {
+                result.push(`  ${prop}: ${value};`);
+            }
+        });
+
+        return result;
+    }
+
+    let fullHtml = [];
+    let currentElement = el;
+    let levels = 0;
+    let allElements = [];
+
+    while (currentElement && currentElement.tagName) {
+        allElements.unshift(currentElement);
+
+        let tag = currentElement.tagName.toLowerCase();
+        let id = currentElement.id ? ` id="${currentElement.id}"` : '';
+        let classes = currentElement.className ? ` class="${currentElement.className}"` : '';
+
+        let otherAttributes = '';
+        Array.from(currentElement.attributes).forEach(attr => {
+            if (attr.name !== 'id' && attr.name !== 'class') {
+                otherAttributes += ` ${attr.name}="${attr.value}"`;
+            }
+        });
+
+        let opening = `<${tag}${id}${classes}${otherAttributes}>`;
+        let closing = `</${tag}>`;
+
+        fullHtml.unshift({
+            level: levels,
+            opening: opening,
+            closing: closing,
+            element: currentElement,
+            tagName: tag
+        });
+
+        if (tag === 'html') break;
+
+        currentElement = currentElement.parentElement;
+        levels++;
+    }
+
+    if (!fullHtml.some(item => item.tagName === 'html')) {
+        fullHtml.unshift({
+            level: -1,
+            opening: '<html>',
+            closing: '</html>',
+            tagName: 'html'
+        });
+    }
+
+    let relatedStyles = new Set();
+    let cssVariables = new Map();
+    let selectorsToSearch = [];
+
+    allElements.forEach(elem => {
+        if (elem.id) selectorsToSearch.push(`#${elem.id}`);
+        if (elem.className) {
+            elem.className.split(' ').forEach(c => {
+                if (c.trim()) selectorsToSearch.push(`.${c}`);
+            });
+        }
+        selectorsToSearch.push(elem.tagName.toLowerCase());
+    });
+
+    selectorsToSearch = [...new Set(selectorsToSearch)];
+
+    try {
+        for (let sheet of document.styleSheets) {
+            try {
+                for (let rule of sheet.cssRules || []) {
+                    if (rule.selectorText === ':root' || rule.selectorText === 'html') {
+                        for (let prop of rule.style) {
+                            if (prop.startsWith('--')) {
+                                cssVariables.set(prop, rule.style.getPropertyValue(prop).trim());
+                            }
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+    } catch (e) {}
+
+    try {
+        for (let sheet of document.styleSheets) {
+            try {
+                for (let rule of sheet.cssRules || []) {
+                    selectorsToSearch.forEach(sel => {
+                        if (rule.selectorText?.includes(sel)) {
+                            let originalCSS = rule.cssText;
+                            let resolvedCSS = resolveCSSVariables(rule.cssText);
+
+                            if (originalCSS !== resolvedCSS) {
+                                relatedStyles.add(`📝 Original: ${originalCSS}`);
+                                relatedStyles.add(`✅ Solved: ${resolvedCSS}`);
+                                relatedStyles.add('---');
+                            } else {
+                                relatedStyles.add(originalCSS);
+                            }
+                        }
+                    });
+                }
+            } catch (e) {}
+        }
+    } catch (e) {}
+
+    let computedForElement = getComputedCSSForElement(el);
+
+    let variablesList = [];
+    cssVariables.forEach((value, name) => {
+        variablesList.push(`  ${name}: ${value}`);
+    });
+
     async function loadParser() {
         if (window.acorn) return window.acorn;
         
@@ -27,7 +186,6 @@ if (!el) {
     loadParser().then(acorn => {
         const walk = window.acorn.walk;
         
-        // ========== VARIABLE AND TYPE ANALYSIS ==========
         class VariableAnalyzer {
             constructor() {
                 this.variables = new Map();
@@ -52,9 +210,7 @@ if (!el) {
                         this.collectDeclarations(ast, scriptIndex);
                         this.detectMethodCalls(ast, scriptIndex);
                         
-                    } catch (e) {
-                        // Silent fail - no fallback to avoid false positives
-                    }
+                    } catch (e) {}
                 });
             }
             
@@ -187,10 +343,7 @@ if (!el) {
                                 object,
                                 method,
                                 line: node.loc?.start.line,
-                                script: scriptIndex,
-                                arguments: node.arguments.map(a => a.type),
-                                objectExists: this.variables.has(object),
-                                objectType: this.variables.get(object)?.type
+                                script: scriptIndex
                             });
                             
                             return;
@@ -203,9 +356,7 @@ if (!el) {
                                 type: 'function_call',
                                 function: funcName,
                                 line: node.loc?.start.line,
-                                script: scriptIndex,
-                                isFunction: this.functions.has(funcName) || 
-                                           this.variables.get(funcName)?.type === 'function'
+                                script: scriptIndex
                             });
                         }
                     },
@@ -217,23 +368,6 @@ if (!el) {
                             line: node.loc?.start.line,
                             script: scriptIndex
                         });
-                    },
-                    
-                    AssignmentExpression: (node) => {
-                        if (node.left.type === 'MemberExpression' &&
-                            (node.left.property.name === 'onclick' ||
-                             node.left.property.name === 'onload' ||
-                             node.left.property.name === 'onchange')) {
-                            
-                            this.methodCalls.push({
-                                type: 'event_handler',
-                                object: node.left.object.name,
-                                event: node.left.property.name,
-                                line: node.loc?.start.line,
-                                script: scriptIndex,
-                                handler: node.right.type
-                            });
-                        }
                     }
                 });
             }
@@ -264,23 +398,64 @@ if (!el) {
             }
         }
         
-        // ========== RUN ANALYSIS ==========
         const analyzer = new VariableAnalyzer();
         analyzer.analyzeScripts();
-        
-        const result = analyzer.getMethodsRelatedTo(el);
+        const jsResult = analyzer.getMethodsRelatedTo(el);
         
         const totalTime = ((performance.now() - startTime) / 1000).toFixed(2);
-        
-        console.log('%c🔷 DEEP-ANALYZE WITH AST 🔷', 'font-size:16px; font-weight:bold; color:#4A90E2;');
-        console.log(`⏱️  Analysis in ${totalTime}s`);
+
+        console.log('%c🔷 COMPLETE ELEMENT ANALYSIS (AST + CSS) 🔷', 'font-size:16px; font-weight:bold; color:#4A90E2;');
+        console.log('%c⏱️  Analysis completed in ' + totalTime + ' seconds', 'font-size:12px; color:#666;');
         console.log('='.repeat(80));
-        
-        console.log('%c📞 REAL METHOD CALLS:', 'font-size:14px; font-weight:bold; color:#27AE60;');
+
+        console.log('%c📄 HTML STRUCTURE:', 'font-size:14px; font-weight:bold; color:#27AE60;');
+        console.log('-'.repeat(50));
+
+        let htmlFinal = [];
+        fullHtml.forEach((item, index) => {
+            let indent = '  '.repeat(index);
+            htmlFinal.push(indent + item.opening);
+        });
+
+        let indentEl = '  '.repeat(fullHtml.length - 1);
+        htmlFinal[indentEl.length/2] = htmlFinal[indentEl.length/2] + ' ← [SELECTED]';
+
+        for (let i = fullHtml.length - 1; i >= 0; i--) {
+            let indent = '  '.repeat(i);
+            htmlFinal.push(indent + fullHtml[i].closing);
+        }
+
+        console.log(htmlFinal.join('\n'));
+
+        console.log('\n%c🎨 CSS VARIABLES DEFINED:', 'font-size:14px; font-weight:bold; color:#F39C12;');
+        console.log('-'.repeat(50));
+        if (variablesList.length > 0) {
+            variablesList.forEach(v => console.log(v));
+        } else {
+            console.log('No CSS variables defined');
+        }
+
+        console.log('\n%c🎨 RELATED CSS (with variables resolved):', 'font-size:14px; font-weight:bold; color:#E67E22;');
+        console.log('-'.repeat(50));
+        if (relatedStyles.size > 0) {
+            relatedStyles.forEach(css => console.log(css));
+        } else {
+            console.log('No specific CSS found');
+        }
+
+        console.log('\n%c📊 COMPUTED STYLES (actual values applied):', 'font-size:14px; font-weight:bold; color:#3498DB;');
+        console.log('-'.repeat(50));
+        if (computedForElement.length > 0) {
+            console.log('element {');
+            computedForElement.forEach(line => console.log(line));
+            console.log('}');
+        }
+
+        console.log('\n%c⚡ JAVASCRIPT METHOD CALLS (AST detected - NO false positives):', 'font-size:14px; font-weight:bold; color:#E74C3C;');
         console.log('-'.repeat(50));
         
-        if (result.calls.length > 0) {
-            result.calls.forEach(call => {
+        if (jsResult.calls.length > 0) {
+            jsResult.calls.forEach(call => {
                 if (call.type === 'method_call') {
                     console.log(`✅ ${call.object}.${call.method}()`);
                 } else if (call.type === 'function_call') {
@@ -292,46 +467,68 @@ if (!el) {
                 console.log('');
             });
         } else {
-            console.log('ℹ️ No method calls found');
+            console.log('No method calls detected');
         }
-        
-        console.log('%c📦 VARIABLES:', 'font-size:14px; font-weight:bold; color:#F39C12;');
+
+        console.log('\n%c📦 VARIABLES DETECTED:', 'font-size:14px; font-weight:bold; color:#F39C12;');
         console.log('-'.repeat(50));
         
-        result.variables.forEach(([name, info]) => {
-            console.log(`📌 ${name}: ${info.type}`);
-        });
-        
-        if (result.arrays.length > 0) {
+        if (jsResult.variables.length > 0) {
+            jsResult.variables.forEach(([name, info]) => {
+                console.log(`📌 ${name}: ${info.type}`);
+            });
+        } else {
+            console.log('No variables detected');
+        }
+
+        if (jsResult.arrays.length > 0) {
             console.log('\n%c📋 ARRAYS:', 'font-size:14px; font-weight:bold; color:#3498DB;');
-            result.arrays.forEach(([name, info]) => {
+            jsResult.arrays.forEach(([name, info]) => {
                 console.log(`📌 ${name} = [${info.elements.join(', ')}] (${info.length} items)`);
             });
         }
-        
-        if (result.objects.length > 0) {
+
+        if (jsResult.objects.length > 0) {
             console.log('\n%c🔧 OBJECTS:', 'font-size:14px; font-weight:bold; color:#9B59B6;');
-            result.objects.forEach(([name, info]) => {
+            jsResult.objects.forEach(([name, info]) => {
                 const props = Object.keys(info.properties).join(', ');
                 console.log(`📌 ${name} = { ${props} }`);
             });
         }
-        
-        if (result.functions.length > 0) {
+
+        if (jsResult.functions.length > 0) {
             console.log('\n%c⚡ FUNCTIONS:', 'font-size:14px; font-weight:bold; color:#E74C3C;');
-            result.functions.forEach(([name, info]) => {
+            jsResult.functions.forEach(([name, info]) => {
                 console.log(`📌 ${name}(${info.params.join(', ')})`);
             });
         }
-        
+
         console.log('\n' + '='.repeat(80));
         console.log('📊 SUMMARY:');
-        console.log(`📞 Method calls: ${result.calls.length}`);
-        console.log(`📦 Variables: ${result.variables.length}`);
-        console.log(`📋 Arrays: ${result.arrays.length}`);
-        console.log(`🔧 Objects: ${result.objects.length}`);
-        console.log(`⚡ Functions: ${result.functions.length}`);
-        console.log(`⏱️  Time: ${totalTime}s`);
+        console.log(`📄 HTML: ${fullHtml.length} levels`);
+        console.log(`🎨 CSS Variables: ${variablesList.length} defined`);
+        console.log(`🎨 CSS Rules: ${relatedStyles.size} rules`);
+        console.log(`📊 Computed properties: ${computedForElement.length}`);
+        console.log(`⚡ JS Method Calls: ${jsResult.calls.length}`);
+        console.log(`📦 Variables: ${jsResult.variables.length}`);
+        console.log(`📋 Arrays: ${jsResult.arrays.length}`);
+        console.log(`🔧 Objects: ${jsResult.objects.length}`);
+        console.log(`⚡ Functions: ${jsResult.functions.length}`);
+        console.log(`⏱️  Total time: ${totalTime}s`);
+
+        console.log({
+            html: htmlFinal.join('\n'),
+            cssVariables: Array.from(cssVariables.entries()),
+            css: Array.from(relatedStyles),
+            computed: computedForElement,
+            js: jsResult.calls,
+            variables: jsResult.variables,
+            arrays: jsResult.arrays,
+            objects: jsResult.objects,
+            functions: jsResult.functions,
+            performance: totalTime + 's'
+        });
+        
     }).catch(() => {
         console.error('❌ Failed to load parser');
     });
