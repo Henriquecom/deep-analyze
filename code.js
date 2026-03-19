@@ -470,39 +470,6 @@ if (!el) {
             console.log('No method calls detected');
         }
 
-        console.log('\n%c📦 VARIABLES DETECTED:', 'font-size:14px; font-weight:bold; color:#F39C12;');
-        console.log('-'.repeat(50));
-        
-        if (jsResult.variables.length > 0) {
-            jsResult.variables.forEach(([name, info]) => {
-                console.log(`📌 ${name}: ${info.type}`);
-            });
-        } else {
-            console.log('No variables detected');
-        }
-
-        if (jsResult.arrays.length > 0) {
-            console.log('\n%c📋 ARRAYS:', 'font-size:14px; font-weight:bold; color:#3498DB;');
-            jsResult.arrays.forEach(([name, info]) => {
-                console.log(`📌 ${name} = [${info.elements.join(', ')}] (${info.length} items)`);
-            });
-        }
-
-        if (jsResult.objects.length > 0) {
-            console.log('\n%c🔧 OBJECTS:', 'font-size:14px; font-weight:bold; color:#9B59B6;');
-            jsResult.objects.forEach(([name, info]) => {
-                const props = Object.keys(info.properties).join(', ');
-                console.log(`📌 ${name} = { ${props} }`);
-            });
-        }
-
-        if (jsResult.functions.length > 0) {
-            console.log('\n%c⚡ FUNCTIONS:', 'font-size:14px; font-weight:bold; color:#E74C3C;');
-            jsResult.functions.forEach(([name, info]) => {
-                console.log(`📌 ${name}(${info.params.join(', ')})`);
-            });
-        }
-
         console.log('\n' + '='.repeat(80));
         console.log('📊 SUMMARY:');
         console.log(`📄 HTML: ${fullHtml.length} levels`);
@@ -510,10 +477,6 @@ if (!el) {
         console.log(`🎨 CSS Rules: ${relatedStyles.size} rules`);
         console.log(`📊 Computed properties: ${computedForElement.length}`);
         console.log(`⚡ JS Method Calls: ${jsResult.calls.length}`);
-        console.log(`📦 Variables: ${jsResult.variables.length}`);
-        console.log(`📋 Arrays: ${jsResult.arrays.length}`);
-        console.log(`🔧 Objects: ${jsResult.objects.length}`);
-        console.log(`⚡ Functions: ${jsResult.functions.length}`);
         console.log(`⏱️  Total time: ${totalTime}s`);
 
         console.log({
@@ -522,10 +485,6 @@ if (!el) {
             css: Array.from(relatedStyles),
             computed: computedForElement,
             js: jsResult.calls,
-            variables: jsResult.variables,
-            arrays: jsResult.arrays,
-            objects: jsResult.objects,
-            functions: jsResult.functions,
             performance: totalTime + 's'
         });
         
