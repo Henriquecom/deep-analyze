@@ -67,12 +67,13 @@ function getComputedCSSForElement(element) {
   return result;
 }
 
+
 let fullHtml = [];
 let currentElement = el;
 let levels = 0;
 let allElements = [];
 
-while (currentElement && currentElement.tagName && levels < 10) {
+while (currentElement && currentElement.tagName) {
   allElements.unshift(currentElement);
   
   let tag = currentElement.tagName.toLowerCase();
@@ -93,11 +94,25 @@ while (currentElement && currentElement.tagName && levels < 10) {
     level: levels,
     opening: opening,
     closing: closing,
-    element: currentElement
+    element: currentElement,
+    tagName: tag
   });
+  
+ 
+  if (tag === 'html') break;
   
   currentElement = currentElement.parentElement;
   levels++;
+}
+
+
+if (!fullHtml.some(item => item.tagName === 'html')) {
+  fullHtml.unshift({
+    level: -1,
+    opening: '<html>',
+    closing: '</html>',
+    tagName: 'html'
+  });
 }
 
 let relatedStyles = new Set();
@@ -144,7 +159,7 @@ try {
             
             if (originalCSS !== resolvedCSS) {
               relatedStyles.add(`📝 Original: ${originalCSS}`);
-              relatedStyles.add(`✅ Resolvido: ${resolvedCSS}`);
+              relatedStyles.add(`✅ Solved: ${resolvedCSS}`);
               relatedStyles.add('---');
             } else {
               relatedStyles.add(originalCSS);
@@ -158,7 +173,6 @@ try {
 
 let computedForElement = getComputedCSSForElement(el);
 
-// MODIFICADO: Removido o "usado como"
 let variablesList = [];
 cssVariables.forEach((value, name) => {
   variablesList.push(`  ${name}: ${value}`);
