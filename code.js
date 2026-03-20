@@ -90,18 +90,20 @@ if (!el) {
             tagName: tag
         });
 
-        if (tag === 'html') break;
+        // 🔴 MODIFICADO: Parar quando encontrar a tag BODY
+        if (tag === 'body') break;
 
         currentElement = currentElement.parentElement;
         levels++;
     }
 
-    if (!fullHtml.some(item => item.tagName === 'html')) {
+    // 🔴 MODIFICADO: Só adiciona html se não tiver encontrado body
+    if (!fullHtml.some(item => item.tagName === 'body')) {
         fullHtml.unshift({
             level: -1,
-            opening: '<html>',
-            closing: '</html>',
-            tagName: 'html'
+            opening: '<body>',
+            closing: '</body>',
+            tagName: 'body'
         });
     }
 
@@ -408,7 +410,7 @@ if (!el) {
         console.log('%c⏱️  Analysis completed in ' + totalTime + ' seconds', 'font-size:12px; color:#666;');
         console.log('='.repeat(80));
 
-        console.log('%c📄 HTML STRUCTURE:', 'font-size:14px; font-weight:bold; color:#27AE60;');
+        console.log('%c📄 HTML STRUCTURE (up to BODY):', 'font-size:14px; font-weight:bold; color:#27AE60;');
         console.log('-'.repeat(50));
 
         let htmlFinal = [];
@@ -451,7 +453,7 @@ if (!el) {
             console.log('}');
         }
 
-        console.log('\n%c⚡ JAVASCRIPT METHOD CALLS (AST detected - NO false positives):', 'font-size:14px; font-weight:bold; color:#E74C3C;');
+        console.log('\n%c⚡ JAVASCRIPT METHOD CALLS (AST detected):', 'font-size:14px; font-weight:bold; color:#E74C3C;');
         console.log('-'.repeat(50));
         
         if (jsResult.calls.length > 0) {
@@ -472,7 +474,7 @@ if (!el) {
 
         console.log('\n' + '='.repeat(80));
         console.log('📊 SUMMARY:');
-        console.log(`📄 HTML: ${fullHtml.length} levels`);
+        console.log(`📄 HTML: ${fullHtml.length} levels (from element to BODY)`);
         console.log(`🎨 CSS Variables: ${variablesList.length} defined`);
         console.log(`🎨 CSS Rules: ${relatedStyles.size} rules`);
         console.log(`📊 Computed properties: ${computedForElement.length}`);
