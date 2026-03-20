@@ -1,6 +1,6 @@
 let el = $0;
 if (!el) {
-    console.error('❌ Select an element first!');
+    console.error('❌ You need to select an element first!');
 } else {
     const startTime = performance.now();
     
@@ -90,14 +90,12 @@ if (!el) {
             tagName: tag
         });
 
-        // 🔴 MODIFICADO: Parar quando encontrar a tag BODY
         if (tag === 'body') break;
 
         currentElement = currentElement.parentElement;
         levels++;
     }
 
-    // 🔴 MODIFICADO: Só adiciona html se não tiver encontrado body
     if (!fullHtml.some(item => item.tagName === 'body')) {
         fullHtml.unshift({
             level: -1,
@@ -168,6 +166,136 @@ if (!el) {
     cssVariables.forEach((value, name) => {
         variablesList.push(`  ${name}: ${value}`);
     });
+
+    let output = [];
+    let uniqueLines = new Set();
+    let relatedElements = new Set();
+    let relationships = [];
+    
+    let namesToSearch = new Set();
+    if (el.id) namesToSearch.add(el.id);
+    if (el.className) {
+        el.className.split(' ').filter(c => c.trim()).forEach(c => namesToSearch.add(c));
+    }
+    Array.from(el.attributes).forEach(attr => {
+        if (attr.value && (attr.value.includes('-') || /[a-z]/i.test(attr.value))) {
+            namesToSearch.add(attr.value);
+        }
+    });
+    namesToSearch.add(el.tagName.toLowerCase());
+
+    let scripts = Array.from(document.querySelectorAll('script'))
+        .map(s => s.textContent)
+        .filter(t => t && t.length > 0);
+
+    let seen = new Set();
+    let allNames = new Set(namesToSearch);
+
+    let manipulationMethods = [
+        'setAttribute', 'removeAttribute', 'appendChild', 'removeChild',
+        'insertAdjacentHTML', 'innerHTML', 'outerHTML', 'insertAdjacentText',
+        'classList.add', 'classList.remove', 'classList.toggle', 'classList.replace',
+        'addEventListener', 'removeEventListener', 'style', 'css', 'attr',
+        'addClass', 'removeClass', 'toggleClass', 'hasClass', 'prop', 'val',
+        'after', 'before', 'append', 'prepend', 'remove', 'empty', 'html', 'text',
+        'replaceChild', 'insertBefore', 'cloneNode', 'replaceWith', 'insertAdjacentElement',
+        'scrollIntoView', 'focus', 'blur', 'click', 'submit', 'reset'
+    ];
+
+    function findElementsInCode(line) {
+        let elements = [];
+        let matches = line.match(/querySelector\(['"]([^'"]+)['"]\)/g) || [];
+        matches.forEach(m => {
+            let selector = m.replace(/querySelector\(['"]/, '').replace(/['"]\)/, '');
+            elements.push(selector);
+        });
+        
+        matches = line.match(/getElementById\(['"]([^'"]+)['"]\)/g) || [];
+        matches.forEach(m => {
+            let id = m.replace(/getElementById\(['"]/, '').replace(/['"]\)/, '');
+            elements.push('#' + id);
+        });
+        
+        return elements;
+    }
+
+    function extractNamesFromCode(code) {
+        let names = new Set();
+        let matches = code.match(/[a-zA-Z_$][a-zA-Z0-9_$]*/g) || [];
+        matches.forEach(name => {
+            if (name.length > 1 && 
+                !['var','let','const','function','return','if','else','for','while',
+                  'this','true','false','null','undefined','new','typeof','instanceof',
+                  'document','window','console','alert','setTimeout','setInterval',
+                  'Array','Object','String','Number','Boolean','Promise','async',
+                  'await','try','catch','finally','throw','class','extends',
+                  'import','export','default','from','as','break','continue',
+                  'switch','case','default','do','in','of','typeof','void',
+                  'delete','instanceof','new','super','yield'].includes(name)) {
+                names.add(name);
+            }
+        });
+        return names;
+    }
+
+    function trace(name, level) {
+        if (level > 1000) return;
+        let key = name + ':' + level;
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        scripts.forEach((script, idx) => {
+            let lines = script.split('\n');
+            lines.forEach((line, i) => {
+                if (!line.includes(name)) return;
+
+                let spaces = '  '.repeat(Math.min(level, 20));
+                let cleanLine = line.trim();
+
+                let hasMethod = manipulationMethods.some(method => line.includes(method));
+                
+                let isDefinition = 
+                    line.includes('var ' + name) ||
+                    line.includes('let ' + name) ||
+                    line.includes('const ' + name) ||
+                    line.includes('function ' + name) ||
+                    line.match(new RegExp(name + '\\s*=\\s*function')) ||
+                    line.match(new RegExp(name + '\\s*[:=]\\s*\\([^)]*\\)\\s*=>'));
+
+                if (hasMethod || isDefinition) {
+                    let marker = hasMethod ? '⚡' : '📌';
+                    let formattedLine = spaces + `${marker} [${level}] Script ${idx}:${i+1} | ${cleanLine}`;
+                    output.push(formattedLine);
+                    
+                    uniqueLines.add(cleanLine);
+
+                    let elementsInLine = findElementsInCode(line);
+                    if (elementsInLine.length > 0) {
+                        elementsInLine.forEach(sel => {
+                            relatedElements.add(sel);
+                            relationships.push({
+                                from: name,
+                                to: sel,
+                                action: cleanLine,
+                                script: idx,
+                                line: i+1
+                            });
+                        });
+                    }
+
+                    let newNames = extractNamesFromCode(line);
+                    newNames.forEach(newName => {
+                        if (newName !== name && !allNames.has(newName)) {
+                            allNames.add(newName);
+                            trace(newName, level + 1);
+                        }
+                    });
+                }
+            });
+        });
+    }
+
+    namesToSearch.forEach(name => trace(name, 0));
 
     async function loadParser() {
         if (window.acorn) return window.acorn;
@@ -406,7 +534,7 @@ if (!el) {
         
         const totalTime = ((performance.now() - startTime) / 1000).toFixed(2);
 
-        console.log('%c🔷 COMPLETE ELEMENT ANALYSIS (AST + CSS) 🔷', 'font-size:16px; font-weight:bold; color:#4A90E2;');
+        console.log('%c🔷 COMPLETE ELEMENT ANALYSIS (RECURSIVE + AST) 🔷', 'font-size:16px; font-weight:bold; color:#4A90E2;');
         console.log('%c⏱️  Analysis completed in ' + totalTime + ' seconds', 'font-size:12px; color:#666;');
         console.log('='.repeat(80));
 
@@ -453,7 +581,23 @@ if (!el) {
             console.log('}');
         }
 
-        console.log('\n%c⚡ JAVASCRIPT METHOD CALLS (AST detected):', 'font-size:14px; font-weight:bold; color:#E74C3C;');
+        console.log('\n%c🔗 RELATED ELEMENTS (recursive trace):', 'font-size:14px; font-weight:bold; color:#9B59B6;');
+        console.log('-'.repeat(50));
+        if (relationships.length > 0) {
+            relationships.forEach(r => {
+                console.log(`📌 ${r.from} → ${r.to}`);
+                console.log(`   Action: ${r.action}`);
+                console.log(`   Location: Script ${r.script}, line ${r.line}`);
+                console.log('');
+            });
+            
+            console.log('🎯 Elements found:');
+            relatedElements.forEach(sel => console.log(`   - ${sel}`));
+        } else {
+            console.log('No related elements found');
+        }
+
+        console.log('\n%c⚡ AST METHOD CALLS (structured):', 'font-size:14px; font-weight:bold; color:#E74C3C;');
         console.log('-'.repeat(50));
         
         if (jsResult.calls.length > 0) {
@@ -469,16 +613,26 @@ if (!el) {
                 console.log('');
             });
         } else {
-            console.log('No method calls detected');
+            console.log('No AST method calls detected');
+        }
+
+        console.log('\n%c📜 RAW JAVASCRIPT (recursive trace):', 'font-size:14px; font-weight:bold; color:#E67E22;');
+        console.log('-'.repeat(50));
+        if (uniqueLines.size > 0) {
+            console.log(Array.from(uniqueLines).join('\n'));
+        } else {
+            console.log('No JavaScript found');
         }
 
         console.log('\n' + '='.repeat(80));
         console.log('📊 SUMMARY:');
-        console.log(`📄 HTML: ${fullHtml.length} levels (from element to BODY)`);
+        console.log(`📄 HTML: ${fullHtml.length} levels (to BODY)`);
         console.log(`🎨 CSS Variables: ${variablesList.length} defined`);
         console.log(`🎨 CSS Rules: ${relatedStyles.size} rules`);
         console.log(`📊 Computed properties: ${computedForElement.length}`);
-        console.log(`⚡ JS Method Calls: ${jsResult.calls.length}`);
+        console.log(`🔗 Related elements (recursive): ${relatedElements.size}`);
+        console.log(`⚡ AST Method Calls: ${jsResult.calls.length}`);
+        console.log(`📜 JS lines (recursive): ${uniqueLines.size}`);
         console.log(`⏱️  Total time: ${totalTime}s`);
 
         console.log({
@@ -486,7 +640,10 @@ if (!el) {
             cssVariables: Array.from(cssVariables.entries()),
             css: Array.from(relatedStyles),
             computed: computedForElement,
-            js: jsResult.calls,
+            jsRecursive: Array.from(uniqueLines),
+            jsAST: jsResult.calls,
+            relatedElements: Array.from(relatedElements),
+            relationships: relationships,
             performance: totalTime + 's'
         });
         
