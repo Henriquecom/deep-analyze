@@ -7,7 +7,6 @@ if (!el) {
     function resolveCSSVariables(cssText) {
         const varRegex = /var\(--[^,)]+(?:,[^)]+)?\)/g;
         const matches = cssText.match(varRegex);
-
         if (!matches) return cssText;
 
         let resolvedText = cssText;
@@ -36,7 +35,6 @@ if (!el) {
         if (resolvedText.match(varRegex)) {
             return resolveCSSVariables(resolvedText);
         }
-
         return resolvedText;
     }
 
@@ -56,10 +54,10 @@ if (!el) {
                 result.push(`  ${prop}: ${value};`);
             }
         });
-
         return result;
     }
 
+    // Coleta da estrutura HTML
     let fullHtml = [];
     let currentElement = el;
     let levels = 0;
@@ -67,7 +65,6 @@ if (!el) {
 
     while (currentElement && currentElement.tagName) {
         allElements.unshift(currentElement);
-
         let tag = currentElement.tagName.toLowerCase();
         let id = currentElement.id ? ` id="${currentElement.id}"` : '';
         let classes = currentElement.className ? ` class="${currentElement.className}"` : '';
@@ -91,7 +88,6 @@ if (!el) {
         });
 
         if (tag === 'body') break;
-
         currentElement = currentElement.parentElement;
         levels++;
     }
@@ -105,6 +101,7 @@ if (!el) {
         });
     }
 
+    // Coleta de estilos e variáveis CSS
     let relatedStyles = new Set();
     let cssVariables = new Map();
     let selectorsToSearch = [];
@@ -118,7 +115,6 @@ if (!el) {
         }
         selectorsToSearch.push(elem.tagName.toLowerCase());
     });
-
     selectorsToSearch = [...new Set(selectorsToSearch)];
 
     try {
@@ -145,7 +141,6 @@ if (!el) {
                         if (rule.selectorText?.includes(sel)) {
                             let originalCSS = rule.cssText;
                             let resolvedCSS = resolveCSSVariables(rule.cssText);
-
                             if (originalCSS !== resolvedCSS) {
                                 relatedStyles.add(`📝 Original: ${originalCSS}`);
                                 relatedStyles.add(`✅ Solved: ${resolvedCSS}`);
@@ -167,6 +162,7 @@ if (!el) {
         variablesList.push(`  ${name}: ${value}`);
     });
 
+    // Análise de JavaScript
     let output = [];
     let uniqueLines = new Set();
     let relatedElements = new Set();
@@ -209,13 +205,11 @@ if (!el) {
             let selector = m.replace(/querySelector\(['"]/, '').replace(/['"]\)/, '');
             elements.push(selector);
         });
-
         matches = line.match(/getElementById\(['"]([^'"]+)['"]\)/g) || [];
         matches.forEach(m => {
             let id = m.replace(/getElementById\(['"]/, '').replace(/['"]\)/, '');
             elements.push('#' + id);
         });
-
         return elements;
     }
 
@@ -253,7 +247,6 @@ if (!el) {
                 let cleanLine = line.trim();
 
                 let hasMethod = manipulationMethods.some(method => line.includes(method));
-
                 let isDefinition = 
                     line.includes('var ' + name) ||
                     line.includes('let ' + name) ||
@@ -266,7 +259,6 @@ if (!el) {
                     let marker = hasMethod ? '⚡' : '📌';
                     let formattedLine = spaces + `${marker} [${level}] Script ${idx}:${i+1} | ${cleanLine}`;
                     output.push(formattedLine);
-
                     uniqueLines.add(cleanLine);
 
                     let elementsInLine = findElementsInCode(line);
@@ -299,7 +291,6 @@ if (!el) {
 
     async function loadParser() {
         if (window.acorn) return window.acorn;
-
         return new Promise((resolve) => {
             const script = document.createElement('script');
             script.src = 'https://unpkg.com/acorn@8.8.2/dist/acorn.js';
@@ -336,10 +327,8 @@ if (!el) {
                             ecmaVersion: 2020,
                             locations: true
                         });
-
                         this.collectDeclarations(ast, scriptIndex);
                         this.detectMethodCalls(ast, scriptIndex);
-
                     } catch (e) {}
                 });
             }
@@ -364,7 +353,6 @@ if (!el) {
                                     if (e.type === 'Identifier') return `ref:${e.name}`;
                                     return 'unknown';
                                 });
-
                                 this.arrays.set(name, {
                                     type: 'array',
                                     elements,
@@ -372,31 +360,22 @@ if (!el) {
                                     line: init.loc?.start.line,
                                     script: scriptIndex
                                 });
-
-                                this.variables.set(name, {
-                                    name, type: 'array', script: scriptIndex
-                                });
+                                this.variables.set(name, { name, type: 'array', script: scriptIndex });
                                 break;
-
                             case 'ObjectExpression':
                                 const props = {};
                                 init.properties.forEach(prop => {
                                     const key = prop.key.name || prop.key.value;
                                     props[key] = prop.value.type;
                                 });
-
                                 this.objects.set(name, {
                                     type: 'object',
                                     properties: props,
                                     line: init.loc?.start.line,
                                     script: scriptIndex
                                 });
-
-                                this.variables.set(name, {
-                                    name, type: 'object', script: scriptIndex
-                                });
+                                this.variables.set(name, { name, type: 'object', script: scriptIndex });
                                 break;
-
                             case 'FunctionExpression':
                             case 'ArrowFunctionExpression':
                                 this.functions.set(name, {
@@ -405,12 +384,8 @@ if (!el) {
                                     line: init.loc?.start.line,
                                     script: scriptIndex
                                 });
-
-                                this.variables.set(name, {
-                                    name, type: 'function', script: scriptIndex
-                                });
+                                this.variables.set(name, { name, type: 'function', script: scriptIndex });
                                 break;
-
                             case 'Literal':
                                 this.variables.set(name, {
                                     name, 
@@ -419,7 +394,6 @@ if (!el) {
                                     script: scriptIndex
                                 });
                                 break;
-
                             case 'Identifier':
                                 this.variables.set(name, {
                                     name,
@@ -428,12 +402,10 @@ if (!el) {
                                     script: scriptIndex
                                 });
                                 break;
-
                             case 'CallExpression':
                                 const methodName = init.callee.type === 'MemberExpression' 
                                     ? init.callee.property.name 
                                     : init.callee.name;
-
                                 this.variables.set(name, {
                                     name,
                                     type: 'call_result',
@@ -445,7 +417,6 @@ if (!el) {
                                 break;
                         }
                     },
-
                     FunctionDeclaration: (node) => {
                         this.functions.set(node.id.name, {
                             type: 'function',
@@ -453,7 +424,6 @@ if (!el) {
                             line: node.loc?.start.line,
                             script: scriptIndex
                         });
-
                         this.variables.set(node.id.name, {
                             name: node.id.name, type: 'function', script: scriptIndex
                         });
@@ -467,7 +437,6 @@ if (!el) {
                         if (node.callee.type === 'MemberExpression') {
                             const object = node.callee.object.name;
                             const method = node.callee.property.name;
-
                             this.methodCalls.push({
                                 type: 'method_call',
                                 object,
@@ -475,13 +444,10 @@ if (!el) {
                                 line: node.loc?.start.line,
                                 script: scriptIndex
                             });
-
                             return;
                         }
-
                         if (node.callee.type === 'Identifier') {
                             const funcName = node.callee.name;
-
                             this.methodCalls.push({
                                 type: 'function_call',
                                 function: funcName,
@@ -490,7 +456,6 @@ if (!el) {
                             });
                         }
                     },
-
                     NewExpression: (node) => {
                         this.methodCalls.push({
                             type: 'constructor_call',
@@ -509,12 +474,9 @@ if (!el) {
 
                 const relevant = this.methodCalls.filter(call => {
                     const callStr = JSON.stringify(call).toLowerCase();
-
-                    const hasClassRef = elementClasses.some(c => 
-                        callStr.includes(c.toLowerCase()));
+                    const hasClassRef = elementClasses.some(c => callStr.includes(c.toLowerCase()));
                     const hasIdRef = elementId && callStr.includes(elementId.toLowerCase());
                     const hasTagRef = callStr.includes(elementTag);
-
                     return hasClassRef || hasIdRef || hasTagRef;
                 });
 
@@ -534,8 +496,20 @@ if (!el) {
 
         const totalTime = ((performance.now() - startTime) / 1000).toFixed(2);
 
-        // ✅ APENAS O RESUMO E O OBJETO FINAL SÃO EXIBIDOS
-        console.log('='.repeat(80));
+        // Preparação da saída HTML para o objeto final
+        let htmlFinalOutput = [];
+        fullHtml.forEach((item, index) => {
+            let indent = '  '.repeat(index);
+            htmlFinalOutput.push(indent + item.opening);
+        });
+        let indentEl = '  '.repeat(fullHtml.length - 1);
+        htmlFinalOutput[indentEl.length/2] = htmlFinalOutput[indentEl.length/2] + ' ← [SELECTED]';
+        for (let i = fullHtml.length - 1; i >= 0; i--) {
+            let indent = '  '.repeat(i);
+            htmlFinalOutput.push(indent + fullHtml[i].closing);
+        }
+
+        // Sumário (console.log puro)
         console.log('📊 SUMMARY:');
         console.log(`📄 HTML: ${fullHtml.length} levels (to BODY)`);
         console.log(`🎨 CSS Variables: ${variablesList.length} defined`);
@@ -546,8 +520,9 @@ if (!el) {
         console.log(`📜 JS lines (recursive): ${uniqueLines.size}`);
         console.log(`⏱️  Total time: ${totalTime}s`);
 
+        // Objeto final (console.log puro)
         console.log({
-            html: htmlFinal.join('\n'),
+            html: htmlFinalOutput.join('\n'),
             cssVariables: Array.from(cssVariables.entries()),
             css: Array.from(relatedStyles),
             computed: computedForElement,
