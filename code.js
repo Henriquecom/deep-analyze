@@ -1,4 +1,4 @@
-//try to use save as snippet
+//try to use as snippet
 let el = $0; 
 if (!el) {
     console.error('❌ You need to select an element first!');
