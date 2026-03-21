@@ -1,3 +1,4 @@
+//try to use save as snippet
 let el = $0; 
 if (!el) {
     console.error('❌ You need to select an element first!');
@@ -101,7 +102,6 @@ if (!el) {
         });
     }
 
-    // Coleta de estilos e variáveis CSS
     let relatedStyles = new Set();
     let cssVariables = new Map();
     let selectorsToSearch = [];
@@ -496,7 +496,6 @@ if (!el) {
 
         const totalTime = ((performance.now() - startTime) / 1000).toFixed(2);
 
-        // Preparação da saída HTML para o objeto final
         let htmlFinalOutput = [];
         fullHtml.forEach((item, index) => {
             let indent = '  '.repeat(index);
@@ -509,7 +508,6 @@ if (!el) {
             htmlFinalOutput.push(indent + fullHtml[i].closing);
         }
 
-        // Sumário (console.log puro)
         console.log('📊 SUMMARY:');
         console.log(`📄 HTML: ${fullHtml.length} levels (to BODY)`);
         console.log(`🎨 CSS Variables: ${variablesList.length} defined`);
@@ -520,7 +518,6 @@ if (!el) {
         console.log(`📜 JS lines (recursive): ${uniqueLines.size}`);
         console.log(`⏱️  Total time: ${totalTime}s`);
 
-        // Objeto final (console.log puro)
         console.log({
             html: htmlFinalOutput.join('\n'),
             cssVariables: Array.from(cssVariables.entries()),
