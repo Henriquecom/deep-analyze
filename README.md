@@ -23,3 +23,4 @@ try using:
 const a = $0;
 fetch('https://raw.githubusercontent.com/Henriquecom/deep-analyze/refs/heads/main/code.js').then(r=>r.text()).then(c=>eval(c.replace(/\$0/g, 'a')))
 ```
+if you have any others problems try use as snippet
